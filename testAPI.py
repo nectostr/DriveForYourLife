@@ -7,8 +7,15 @@ import time
 import numba
 
 times = []
+total_global_privat_pic_num_special_for_timur = 0
+
+
+def way_foe_loosers(way):
+    for i in way:
+        print(i//width, i%width)
 
 def create_beaute():
+    global total_global_privat_pic_num_special_for_timur
     url = f'https://localhost:8080/babbage/api/v1/world'
     r = re.post(url, verify=False).json()
     width, height = r["width"], r["height"]
@@ -24,26 +31,31 @@ def create_beaute():
         arr[user_starts // height, user_starts % width, 0] = 100
         user_to = r["customers"][i]["destination"]
         arr[user_to // height, user_to % width, 2] = 100
-    for i in r["cars"]:
+    # for i in r["cars"]:
+    # with "0" as i:
+    if True:
+        i = '0'
         cars = r["cars"][i]["position"]
-        arr[cars // height, cars % width, 1] = 100
+        arr[cars // height, cars % width, 1] = 200
     plt.imshow(arr)
-    fig.canvas.draw()
+    plt.savefig(f"data/{total_global_privat_pic_num_special_for_timur}.jpg")
+    total_global_privat_pic_num_special_for_timur += 1
 
 def bfs(matrix, w, h, start, all_appropriete):
     to_see = []
     visited = []
     to_see.append([start])
-    while to_see:
+    while to_see:# and len(to_see[-1]) < 15: #if way to long
         #TODO sort to see via h???
         path = to_see[-1]
         curr = path[-1]
         visited.append(curr)
         del to_see[-1]
         if curr not in all_appropriete:
-            for i in np.argwhere(matrix[curr]>0):
-                if i[0] not in visited:
-                    to_see.insert(0, path + list(i))
+            if len(to_see) < 50:
+                for i in np.argwhere(matrix[curr]>0):
+                    if i[0] not in visited:
+                        to_see.insert(0, path + list(i))
         else:
             return path[1:]
     return []
@@ -60,17 +72,17 @@ def dec(f):
     return w
 
 
-#@numba.jit()
+# @numba.jit()
 def build_c_m(field):
     height, width = field.shape
     conf_matrix = np.zeros((width * height, width * height), dtype=int)
     for fi_x in range(height):
         for fi_y in range(width):
-            i = fi_x + fi_y * height
+            i = fi_x*height + fi_y
             for mx, my in ((-1, 0), (1, 0), (0, 1), (0, -1)):
                 if not mx == my and field[fi_x, fi_y] != 0:
                     if 0 <= fi_x + mx < width and 0 <= fi_y + my < height:
-                        j = (fi_x + mx) + (fi_y + my) * height
+                        j = (fi_x + mx)* height + (fi_y + my)
                         if field[fi_x + mx, fi_y + my] != 0:
                             conf_matrix[i, j] = 1
     return conf_matrix
@@ -90,87 +102,118 @@ def build_start_mask():
                     car_start // height + start_mask_side // 2)]
 
 def move_car(car_id, move):
-    url = f'https://api.citysimulation.eu/babbge/api/v1/actions'
+    headers = {'content-type': 'application/json', "Authorization": config.game_token
+    }
+    url = f'https://localhost:8080/{config.token}/api/v1/actions'
     data = {"Type": "move", "Action":
             {
             "CarId": car_id,
             "MoveDirection": move
-            } }
-    r = re.post(url, data=data, verify=False)
+            }
+            }
+    r = re.post(url, data=json.dumps(data), verify=False, headers=headers)
+    print(r.text)
 
 
 
 
 if __name__ == '__main__':
-    # t1 = time.time()
-    fig = plt.gcf()
-    fig.show()
-    fig.canvas.draw()
+    # TODO check if person exist
+
+    # fig = plt.gcf()
+    # fig.show()
+    # fig.canvas.draw()
     create_beaute()
     url = f'https://localhost:8080/babbage/api/v1/world'
     r = re.post(url, verify=False).json()
     width = r["width"]
     height = r["height"]
-    start_mask_side = width//10
+    start_mask_side = width // 3
     field = np.zeros((width, height), dtype=int)
     for i in range(len(r["grid"])):
         if r["grid"][i]:
             field[i // height, i % width] = 1
-    a_mat = build_c_m(field)#f(field)
+    a_mat = build_c_m(field)  # f(field)
     all_users_origin = [r["customers"][i]["origin"] for i in r['customers']]
     start_to_id = {r["customers"][i]["origin"]: i for i in r['customers']}
+
     # for i in r["cars"]:
     i = "0"
-    create_beaute()
+
     car_start = r["cars"][i]["position"]
+    car_capacity = r["cars"][i]["capacity"]
+    curr_capacity = 0
     way = []
     all_important_ahead = []
     way += bfs(a_mat, width, height, car_start, all_users_origin)
     if not way:
-        continue
+        print("Not found closest point")
+        time.sleep(100)
     all_important_ahead.append(way[-1])
-    way += bfs(a_mat, width, height, way[-1], [int(start_to_id[way[-1]])])
+    way_to_fin = bfs(a_mat, width, height, way[-1], [r["customers"][start_to_id[way[-1]]]["destination"]])
+
+    if way_to_fin:
+        way += way_to_fin
+    else:
+        print("THis is fake")
+        way += [way[-1]-1, way[-1]-2, way[-1]-3] #TODO shiiiiit - if rock?
     all_important_ahead.append(way[-1])
-    #TODO check if correct points
+    # TODO check if correct points
     start_mask = build_start_mask()
     fin_mask = build_fin_mask()
     prev = car_start
     move = 0
+
     while way:
+        create_beaute()
+        t1 = time.time()
         curr = way[0]
         if curr > prev:
             if prev + 1 == curr:
                 move = 1
             else:
-                move = 2
+                move = 0
         else:
             if prev - 1 == curr:
                 move = 3
             else:
-                move = 0
+                move = 2
         del way[0]
         move_car(car_id=int(i), move=move)
-        #TODO rebuild all users_origins
+        # TODO rebuild all users_origins
 
-        #TODO REbuild, not from the start finMask via move
+        # TODO REbuild, not from the start finMask via move
         start_mask = build_start_mask()
         fin_mask = build_fin_mask()
         if not curr in all_important_ahead:
-            possible = set(all_users_origin) - (
-                set(all_users_origin) - set(start_mask))
-            for point in possible:
-                rebuild_list = all_important_ahead + list(possible)
-                new_way = []
-                while rebuild_list:
-                    new_way += bfs(a_mat, width, height, curr, rebuild_list)
-                    del rebuild_list[rebuild_list.index(new_way[-1])]
-                way = new_way
+            if curr_capacity <= car_capacity:
+
+                possible = set(all_users_origin) - (
+                        set(all_users_origin) - set(start_mask))
+                # print(f"way before is {way}")
+                curr_capacity += len(possible)
+                for point in possible:
+
+                    rebuild_list = all_important_ahead + list(possible)
+                    new_way = []
+                    while rebuild_list:
+                        new_way += bfs(a_mat, width, height, curr, rebuild_list)
+                        if new_way:
+                            del rebuild_list[rebuild_list.index(new_way[-1])]
+
+                    way = new_way
         else:
             del all_important_ahead[all_important_ahead.index(curr)]
+            if curr not in all_users_origin:
+                curr_capacity -= 1
         prev = curr
-        print(curr)
+        way_foe_loosers(way)
+        # print(time.time() - t1)
+        if time.time() - t1 < 0.2:
+            print("waited")
+            time.sleep(time.time() - t1)
 
-
+time.sleep(100)
 
 
 
