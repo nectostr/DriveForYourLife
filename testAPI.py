@@ -8,6 +8,24 @@ import numba
 
 times = []
 
+
+def bfs(matrix, w, h, start, all_appropriete):
+    to_see = []
+    to_see.append([start])
+    while to_see:
+        path = to_see[-1]
+        curr = path[-1]
+        del to_see[-1]
+        if to_see not in all_appropriete:
+            for i in range(w*h):
+                if matrix[curr // h, i] == 1:
+                    to_see.insert(0, path + [i])
+        else:
+            return path[1:]
+    return False
+
+
+
 def dec(f):
     def w(*args, **kwargs):
         global times
@@ -34,7 +52,7 @@ def build_c_m(field):
                         j = (fi_x + mx) * (fi_y + my)
                         if field[fi_x + mx, fi_y + my] != 0:
                             conf_matrix[i, j] = 1
-
+    return conf_matrix
 
 
 
@@ -43,46 +61,28 @@ url = f'https://localhost:8080/babbage/api/v1/world'
 r = re.post(url, verify=False).json()
 width = r["width"]
 height = r["height"]
-print(height, width)
-
-fig = plt.gcf()
-fig.show()
-fig.canvas.draw()
-
-for run in range(1000):
-    try:
-        url = f'https://localhost:8080/babbage/api/v1/world'
-        r = re.post(url, verify=False).json()
-        arr = np.zeros((width, height, 3), dtype=int)
-        field = np.zeros((width, height), dtype=int)
-        conf_matrix = np.zeros((width * height, width*height), dtype=int)
-        for i in range(len(r["grid"])):
-            if r["grid"][i]:
-                arr[i // height, i % width, 0] = 50
-                arr[i // height, i % width, 1] = 50
-                arr[i // height, i % width, 2] = 50
-                field[i // height, i % width] = 1
-
-
-        for i in r["customers"]:
-            # if int(i) < int(max(r["customers"]))//2:
-            user_starts = r["customers"][i]["origin"]
-            arr[user_starts // height, user_starts % width,0] = 100
-            # arr[user_starts // r["height"], user_starts % r["width"],1] = 0
-            # arr[user_starts // r["height"], user_starts % r["width"],2] = 0
-            # if int(i) > int(max(r["customers"]))//2:
-            user_to = r["customers"][i]["destination"]
-            arr[user_to // height, user_to % width, 2] = 100
-        for i in r["cars"]:
-            cars = r["cars"][i]["position"]
-            arr[cars // height, cars % width, 1] = 100
-
-        conf_matrix = f(field)
-
-        plt.imshow(arr)
-        fig.canvas.draw()
-    except:
-        break
+field = np.zeros((width, height), dtype=int)
+for i in range(len(r["grid"])):
+    if r["grid"][i]:
+        field[i // height, i % width] = 1
+a_mat = f(field)
+all_users = [r["customers"][i]["origin"] for i in r['customers']]
+start_id = {r["customers"][i]["origin"]: i for i in r['customers']}
+car_start = r["cars"]["0"]["position"]
+way = []
+all_important_ahead = []
+way += bfs(a_mat, width, height, car_start, all_users)
+all_important_ahead.append(way[-1])
+way += bfs(a_mat, width, height, way[-1], [start_id[way[-1]]])
+all_important_ahead.append(way[-1])
+while way:
+    curr = way[0]
+    del way[0]
+    #TODO move finMask
+    if curr in all_important_ahead:
+        pass
+    else:
+        pass
 
 print(times)
 print(np.mean(times))
@@ -100,7 +100,8 @@ build matrix
 get closer
 
 for step (check if future pers still there for all future points, resize mask )
-    
+    if reached - nimus this
+    else:
     search thoose who in current mask and end in total mask
         (- person reachable (start and finsh))
         (- took all) / (- took one)
