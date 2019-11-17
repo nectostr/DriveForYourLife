@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 import json
 import config
 import time
+import os
+import warnings
+warnings.filterwarnings("ignore")
 import numba
 
 times = []
@@ -11,8 +14,15 @@ total_global_privat_pic_num_special_for_timur = 0
 
 
 def way_foe_loosers(way):
+
     for i in way:
-        print(i//width, i%width)
+        print(f"({i//width}, {i%width})", end=" ")
+    print()
+
+def check_if_we_moved(car_id="0"):
+    url = f'https://localhost:8080/babbage/api/v1/world'
+    r = re.post(url, verify=False).json()
+    return r["cars"][car_id]["position"]
 
 def create_beaute():
     global total_global_privat_pic_num_special_for_timur
@@ -46,16 +56,21 @@ def bfs(matrix, w, h, start, all_appropriete):
     visited = []
     to_see.append([start])
     while to_see:# and len(to_see[-1]) < 15: #if way to long
-        #TODO sort to see via h???
+        closesed = min([abs(start-i) for i in all_users_origin])
+        to_see.sort(reverse=False, key=lambda x:
+        abs(x[-1] - closesed))
+        # min([(x[-1]//h - i//h)**2+(x[-1]%w - i%w)**2
+        #      for i in all_users_origin] if len(to_see[0])<10 else
+        #     lambda x: 1-len(x)))
         path = to_see[-1]
         curr = path[-1]
         visited.append(curr)
         del to_see[-1]
         if curr not in all_appropriete:
-            if len(to_see) < 50:
-                for i in np.argwhere(matrix[curr]>0):
-                    if i[0] not in visited:
-                        to_see.insert(0, path + list(i))
+            # if len(to_see) < 50:
+            for i in np.argwhere(matrix[curr]>0):
+                if i[0] not in visited:
+                    to_see.insert(0, path + list(i))
         else:
             return path[1:]
     return []
@@ -112,14 +127,15 @@ def move_car(car_id, move):
             }
             }
     r = re.post(url, data=json.dumps(data), verify=False, headers=headers)
-    print(r.text)
+    # print(r)
 
 
 
 
 if __name__ == '__main__':
     # TODO check if person exist
-
+    for i in os.listdir("data"):
+        os.remove("data\\"+i)
     # fig = plt.gcf()
     # fig.show()
     # fig.canvas.draw()
@@ -128,7 +144,8 @@ if __name__ == '__main__':
     r = re.post(url, verify=False).json()
     width = r["width"]
     height = r["height"]
-    start_mask_side = width // 3
+    start_mask_side = 9
+    print(f"mask_size = {start_mask_side}")
     field = np.zeros((width, height), dtype=int)
     for i in range(len(r["grid"])):
         if r["grid"][i]:
@@ -141,7 +158,7 @@ if __name__ == '__main__':
     i = "0"
 
     car_start = r["cars"][i]["position"]
-    car_capacity = r["cars"][i]["capacity"]
+    car_capacity = 1#r["cars"][i]["capacity"]
     curr_capacity = 0
     way = []
     all_important_ahead = []
@@ -163,7 +180,7 @@ if __name__ == '__main__':
     fin_mask = build_fin_mask()
     prev = car_start
     move = 0
-
+    real_prev, real_curr = car_start, car_start
     while way:
         create_beaute()
         t1 = time.time()
@@ -178,8 +195,13 @@ if __name__ == '__main__':
                 move = 3
             else:
                 move = 2
-        del way[0]
         move_car(car_id=int(i), move=move)
+        real_curr = check_if_we_moved()
+        if real_curr != curr:
+            del way[0]
+        else:
+            print("Do_not_move", move)
+            continue
         # TODO rebuild all users_origins
 
         # TODO REbuild, not from the start finMask via move
@@ -191,10 +213,15 @@ if __name__ == '__main__':
                 possible = set(all_users_origin) - (
                         set(all_users_origin) - set(start_mask))
                 # print(f"way before is {way}")
-                curr_capacity += len(possible)
-                for point in possible:
 
-                    rebuild_list = all_important_ahead + list(possible)
+                for point in possible:
+                    if car_capacity <= curr_capacity:
+                        break
+                    curr_capacity+=1
+                    rebuild_list = list(set(all_important_ahead\
+                                   + list(possible) + \
+                                   [r["customers"][start_to_id[i]]["destination"]
+                                    for i in possible]))
                     new_way = []
                     while rebuild_list:
                         new_way += bfs(a_mat, width, height, curr, rebuild_list)
